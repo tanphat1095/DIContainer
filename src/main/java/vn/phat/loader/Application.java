@@ -6,12 +6,15 @@ import vn.phat.annotation.PackageScan;
 import vn.phat.container.BeanFactory;
 import vn.phat.container.BeanFactoryImpl;
 
-import javax.swing.text.html.Option;
 import java.io.File;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Predicate;
 
 public class Application {
