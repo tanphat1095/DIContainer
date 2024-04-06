@@ -6,14 +6,12 @@ import vn.phat.annotation.PackageScan;
 import vn.phat.container.BeanFactory;
 import vn.phat.container.BeanFactoryImpl;
 
+import javax.swing.text.html.Option;
 import java.io.File;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.function.Predicate;
 
 public class Application {
@@ -49,13 +47,15 @@ public class Application {
         }
     }
 
-    private static void registerBeanIfMarked(Class<?> clazz) throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
+    private static <T> T registerBeanIfMarked(Class<T> clazz) throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
         Bean beanMarked = clazz.getAnnotation(Bean.class);
         if(beanMarked != null){
-            Object object = clazz.getConstructor().newInstance();
+            T object = Optional.ofNullable(getInstance().getBean(clazz)).orElse(clazz.getConstructor().newInstance());
             registerDependencies(object);
             getInstance().registerBean(clazz, object);
+            return object;
         }
+        return null;
     }
 
     private static void registerDependencies(Object object) throws InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException {
@@ -64,9 +64,14 @@ public class Application {
         List<Field> fieldAutowired = Arrays.stream(fields).filter(isAutowiredField).toList();
         for(Field f : fieldAutowired){
             f.setAccessible(true);
-            Class<?> declaredClass = f.getDeclaringClass();
-            registerBeanIfMarked(declaredClass);
+            Class<?> declaredClass = f.getType();
+            setBeanToField(declaredClass, f, object);
         }
+    }
+
+    static <T> void setBeanToField(Class<T> clazz, Field field, Object object) throws InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException {
+        T bean = Optional.ofNullable(getInstance().getBean(clazz)).orElse(registerBeanIfMarked(clazz));
+        field.set(object, bean);
     }
 
     private static File getFile(Class<?> mainClass) {

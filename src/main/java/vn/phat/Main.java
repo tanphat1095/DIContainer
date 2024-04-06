@@ -1,15 +1,16 @@
 package vn.phat;
 
 
+import vn.phat.annotation.PackageScan;
+import vn.phat.beans.FirstBean;
 import vn.phat.container.BeanFactory;
 import vn.phat.loader.Application;
 
-//@PackageScan("vn.phat.beans")
+@PackageScan
 public class Main {
-    public static void main(String...args){
+    public static void main(String...args) {
         BeanFactory beanFactory = Application.run(Main.class);
-        beanFactory.getDeclaredBeans().forEach(item->{
-            System.out.println(beanFactory.getBean(item).getClass());
-        });
+        FirstBean firstBean = beanFactory.getBean(FirstBean.class);
+        firstBean.action();
     }
 }
