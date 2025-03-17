@@ -66,8 +66,7 @@ public class Application {
         Predicate<Field> isAutowiredField = f -> f.getAnnotation(Autowired.class) != null;
         List<Field> fieldAutowired = Arrays.stream(fields).filter(isAutowiredField).toList();
         for(Field f : fieldAutowired){
-            f.setAccessible(true);
-            Class<?> declaredClass = f.getType();
+            f.setAccessible(true);            Class<?> declaredClass = f.getType();
             setBeanToField(declaredClass, f, object);
         }
     }

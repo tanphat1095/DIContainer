@@ -7,8 +7,12 @@ import vn.phat.annotation.Bean;
 @Bean
 public class FirstBean implements ActionInterface {
 
-    @Autowired
     private SecondBean secondBean;
+
+    @Autowired
+    public void setSecondBean(SecondBean secondBean) {
+        this.secondBean = secondBean;
+    }
 
     public void action(){
         System.out.println("This is "+ this.getName());

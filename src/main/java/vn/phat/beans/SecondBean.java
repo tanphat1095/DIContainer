@@ -6,8 +6,12 @@ import vn.phat.annotation.Bean;
 @Bean
 public class SecondBean implements ActionInterface {
 
+    private final ThirdBean thirdBean;
+
     @Autowired
-    private ThirdBean thirdBean;
+    public SecondBean(ThirdBean thirdBean) {
+        this.thirdBean = thirdBean;
+    }
 
     public void action(){
         System.out.println("This is "+ this.getName());
