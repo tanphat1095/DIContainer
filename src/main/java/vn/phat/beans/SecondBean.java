@@ -9,8 +9,12 @@ public class SecondBean implements ActionInterface {
     private final ThirdBean thirdBean;
 
     @Autowired
-    public SecondBean(ThirdBean thirdBean) {
+    private FourthBean fourthBean;
+
+    @Autowired
+    public SecondBean(ThirdBean thirdBean, FourthBean fourthBean) {
         this.thirdBean = thirdBean;
+        this.fourthBean = fourthBean;
     }
 
     public void action(){
@@ -18,4 +22,7 @@ public class SecondBean implements ActionInterface {
         action(thirdBean);
     }
 
+    public FourthBean getFourthBean() {
+        return fourthBean;
+    }
 }

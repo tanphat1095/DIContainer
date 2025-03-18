@@ -14,6 +14,10 @@ public class FirstBean implements ActionInterface {
         this.secondBean = secondBean;
     }
 
+    public SecondBean getSecondBean() {
+        return secondBean;
+    }
+
     public void action(){
         System.out.println("This is "+ this.getName());
         action(secondBean);

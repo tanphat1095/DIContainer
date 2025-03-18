@@ -3,47 +3,62 @@ package vn.phat.container;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import vn.phat.beans.FirstBean;
-import org.mockito.MockitoAnnotations;
-import org.mockito.Mock;
-import org.mockito.InjectMocks;
-import vn.phat.loader.Application;
+import vn.phat.beans.SecondBean;
+import vn.phat.beans.ThirdBean;
+import vn.phat.beans.FourthBean;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
 class BeanFactoryImplTest {
 
-    @Mock
-    private BeanFactory beanFactory;
+    private BeanFactoryImpl beanFactory;
 
-    @BeforeEach
+   @BeforeEach
     void setUp() {
-        MockitoAnnotations.openMocks(this);
+        beanFactory = new BeanFactoryImpl();
+        beanFactory.registerBean(ThirdBean.class, null);
+        beanFactory.registerBean(FourthBean.class, null);
+        beanFactory.registerBean(SecondBean.class, null);
+        beanFactory.registerBean(FirstBean.class, null);
     }
 
     @Test
-    void testGetBean() {
-        // Mock the BeanFactory to return a specific bean definition
-        FirstBean firstBean = new FirstBean();
-        when(beanFactory.getBean(eq("firstBean"), eq(FirstBean.class))).thenReturn(firstBean);
+    void testFieldInjection() {
+        FirstBean firstBean = beanFactory.getBean(FirstBean.class);
+        SecondBean secondBean = beanFactory.getBean(SecondBean.class);
+        ThirdBean thirdBean = beanFactory.getBean(ThirdBean.class);
 
-        // Call the getBean method
-        Object bean = beanFactory.getBean("firstBean", FirstBean.class);
+        beanFactory.autowireFields(beanFactory, firstBean, thirdBean);
 
-        // Assert that the bean is retrieved correctly
-        assertNotNull(bean);
-        assertEquals(FirstBean.class, bean.getClass());
+        assertNotNull(firstBean, "FirstBean should not be null");
+        assertNotNull(thirdBean, "ThirdBean should not be null");
     }
 
     @Test
-    void testRegisterBean() throws Exception {
-        // Mock the BeanFactory
-        FirstBean firstBean = new FirstBean();
+    void testSetterInjection() {
+        FirstBean firstBean = beanFactory.getBean(FirstBean.class);
+        assertNotNull(firstBean.getSecondBean(), "SecondBean should be injected into FirstBean via setter");
+    }
 
-        // Call the registerBean method
-        beanFactory.registerBean(FirstBean.class, firstBean);
+    @Test
+    void testConstructorInjection() {
+        SecondBean secondBean = beanFactory.getBean(SecondBean.class);
+        assertNotNull(secondBean, "SecondBean should not be null");
+    }
 
-        // Assert that the bean is created and stored correctly
-        verify(beanFactory, times(1)).registerBean(eq(FirstBean.class), eq(firstBean));
+    @Test
+    void testMultiThreadedBeanRetrieval() throws InterruptedException {
+        Thread thread = new Thread(() -> {
+            FirstBean firstBean = beanFactory.getBean(FirstBean.class);
+            assertNotNull(firstBean, "FirstBean should not be null in the new thread");
+        });
+        thread.start();
+        thread.join();
+    }
+
+    @Test
+    void testFourthBeanInjection() {
+        SecondBean secondBean = beanFactory.getBean(SecondBean.class);
+        assertNotNull(secondBean.getFourthBean(), "FourthBean should be injected into SecondBean");
     }
 }
