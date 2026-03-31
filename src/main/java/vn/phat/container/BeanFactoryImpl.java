@@ -36,13 +36,16 @@ public class BeanFactoryImpl implements BeanFactory{
 
             Object beanInstance;
             if (autowiredConstructor != null) {
+                // Constructor injection: resolve params from the container
                 Object[] dependencies = resolveConstructorDependencies(autowiredConstructor, new HashSet<>());
                 beanInstance = autowiredConstructor.newInstance(dependencies);
             } else {
+                // Use the pre-built instance supplied by Application (or create via no-arg ctor)
                 beanInstance = bean != null ? bean : clazz.getDeclaredConstructor().newInstance();
             }
 
-            resolveSetterDependencies(beanInstance, new HashSet<>());
+            // NOTE: @Autowired field/setter injection is handled by Application,
+            // not here, to guarantee correct registration order and proxy support.
 
             String beanName = getBeanName(clazz);
             beans.put(beanName, beanInstance);
@@ -54,8 +57,15 @@ public class BeanFactoryImpl implements BeanFactory{
     @Override
     public <T> T getBean(Class<T> clazz) {
         assertNotNull(clazz);
-        String beanName = getBeanName(clazz);
-        return getBean(beanName, clazz);
+        Bean beanAnnotation = clazz.getAnnotation(Bean.class);
+        if (beanAnnotation != null) {
+            // Happy path: the class is annotated – look up by bean name
+            String beanName = getBeanName(clazz);
+            return getBean(beanName, clazz);
+        }
+        // Fallback: clazz is an interface or un-annotated class – find first
+        // bean in the registry whose runtime type is assignable to clazz.
+        return findBeanByType(clazz);
     }
 
     @Override
@@ -80,8 +90,25 @@ public class BeanFactoryImpl implements BeanFactory{
     private String getBeanName(Class<?> clazz){
         assertNotNull(clazz);
         Bean beanAnnotation = clazz.getAnnotation(Bean.class);
-        assert beanAnnotation != null;
-        return beanAnnotation.value() == null || beanAnnotation.value().trim().isEmpty() ? NameConverter.convertCLassToBeanName(clazz) : beanAnnotation.value();
+        if (beanAnnotation == null) {
+            throw new IllegalArgumentException(
+                    "Class " + clazz.getName() + " is not annotated with @Bean");
+        }
+        return beanAnnotation.value() == null || beanAnnotation.value().trim().isEmpty()
+                ? NameConverter.convertCLassToBeanName(clazz)
+                : beanAnnotation.value();
+    }
+
+    /**
+     * Scans all registered beans and returns the first one that is an
+     * instance of {@code clazz} (handles interfaces and abstract types).
+     */
+    @SuppressWarnings("unchecked")
+    private <T> T findBeanByType(Class<T> clazz) {
+        return (T) beans.values().stream()
+                .filter(b -> clazz.isAssignableFrom(b.getClass()))
+                .findFirst()
+                .orElse(null);
     }
 
     private <T> T castBeanObject(Class<T> clazz, Object bean){
@@ -122,9 +149,9 @@ public class BeanFactoryImpl implements BeanFactory{
         }
         resolving.add(clazz);
         try {
-            String beanName = getBeanName(clazz);
-            Object bean = getBean(beanName);
-             if (bean == null) {
+            // Use the public getBean(Class) which handles both @Bean classes and interfaces
+            Object bean = getBean(clazz);
+            if (bean == null) {
                 throw new RuntimeException("No bean found for class: " + clazz.getName());
             }
             return bean;
@@ -152,5 +179,20 @@ public class BeanFactoryImpl implements BeanFactory{
 
     public BeanFactoryImpl autowireProperties(BeanFactoryImpl beanFactory) {
         return this;
+    }
+
+    /**
+     * Directly store {@code bean} under the given {@code beanName}, replacing
+     * any previously registered instance.  Used by the AOP post-processor to
+     * swap a raw bean for its transactional proxy without re-running injection.
+     *
+     * @param beanName the canonical name already in the registry
+     * @param bean     the replacement object (usually a JDK dynamic proxy)
+     */
+    public void registerBeanByName(String beanName, Object bean) {
+        if (beanName == null || beanName.isBlank()) {
+            throw new IllegalArgumentException("Bean name must not be null or blank");
+        }
+        beans.put(beanName, bean);
     }
 }
