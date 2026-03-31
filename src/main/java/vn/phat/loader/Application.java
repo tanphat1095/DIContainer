@@ -53,7 +53,6 @@ public class Application {
             return getInstance();
         }
         catch (Exception e){
-            e.printStackTrace();
             return getInstance();
         }
     }
