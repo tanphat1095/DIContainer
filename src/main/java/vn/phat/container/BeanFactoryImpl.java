@@ -2,11 +2,16 @@ package vn.phat.container;
 
 import vn.phat.annotation.Autowired;
 import vn.phat.annotation.Bean;
+import vn.phat.exception.AmbiguousBeanException;
+import vn.phat.exception.BeanCreationException;
+import vn.phat.exception.BeanResolutionException;
+import vn.phat.exception.CircularDependencyException;
 import vn.phat.util.NameConverter;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -21,14 +26,16 @@ public class BeanFactoryImpl implements BeanFactory{
 
     @Override
     public void registerBean(Class<?> clazz, Object bean) {
-        assertNotNull(clazz);
+        if (clazz == null) {
+            throw new IllegalArgumentException("Class type cannot be null");
+        }
 
         try {
             Constructor<?> autowiredConstructor = null;
             for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
                 if (constructor.isAnnotationPresent(Autowired.class)) {
                     if (autowiredConstructor != null) {
-                        throw new IllegalStateException("Only one constructor can be annotated with @Autowired");
+                        throw new BeanCreationException("Only one constructor can be annotated with @Autowired");
                     }
                     autowiredConstructor = constructor;
                 }
@@ -36,46 +43,86 @@ public class BeanFactoryImpl implements BeanFactory{
 
             Object beanInstance;
             if (autowiredConstructor != null) {
-                // Constructor injection: resolve params from the container
                 Object[] dependencies = resolveConstructorDependencies(autowiredConstructor, new HashSet<>());
                 beanInstance = autowiredConstructor.newInstance(dependencies);
             } else {
-                // Use the pre-built instance supplied by Application (or create via no-arg ctor)
                 beanInstance = bean != null ? bean : clazz.getDeclaredConstructor().newInstance();
             }
 
-            // NOTE: @Autowired field/setter injection is handled by Application,
-            // not here, to guarantee correct registration order and proxy support.
-
             String beanName = getBeanName(clazz);
             beans.put(beanName, beanInstance);
+        } catch (BeanCreationException e) {
+            throw e;
         } catch (Exception e) {
-            throw new RuntimeException("Failed to create bean: " + clazz.getName(), e);
+            throw new BeanCreationException("Failed to create bean: " + clazz.getName(), e);
         }
     }
 
     @Override
     public <T> T getBean(Class<T> clazz) {
-        assertNotNull(clazz);
+        if (clazz == null) {
+            throw new IllegalArgumentException("Class type cannot be null");
+        }
+
         Bean beanAnnotation = clazz.getAnnotation(Bean.class);
         if (beanAnnotation != null) {
-            // Happy path: the class is annotated – look up by bean name
             String beanName = getBeanName(clazz);
-            return getBean(beanName, clazz);
+            try {
+                return getBean(beanName, clazz);
+            } catch (BeanResolutionException e) {
+                throw new BeanResolutionException(
+                        "Bean of type " + clazz.getSimpleName() + " with name '" + beanName +
+                        "' not found. Available beans: " + beans.keySet(),
+                        e
+                );
+            }
         }
-        // Fallback: clazz is an interface or un-annotated class – find first
-        // bean in the registry whose runtime type is assignable to clazz.
-        return findBeanByType(clazz);
+
+        T bean = findBeanByType(clazz);
+        if (bean == null) {
+            List<String> similarBeans = findSimilarBeans(clazz);
+            String message = "No bean found of type " + clazz.getSimpleName();
+            if (!similarBeans.isEmpty()) {
+                message += ". Available beans: " + beans.keySet();
+            }
+            throw new BeanResolutionException(message);
+        }
+        return bean;
     }
 
     @Override
     public <T> T getBean(String beanName, Class<T> beanType) {
-        return castBeanObject(beanType, getBean(beanName));
+        if (beanType == null) {
+            throw new IllegalArgumentException("Bean type cannot be null");
+        }
+        Object bean = getBean(beanName);
+        if (bean == null) {
+            return null;
+        }
+        try {
+            return castBeanObject(beanType, bean);
+        } catch (ClassCastException e) {
+            throw new BeanResolutionException(
+                    "Bean '" + beanName + "' of type " + bean.getClass().getSimpleName() +
+                    " cannot be cast to " + beanType.getSimpleName(),
+                    e
+            );
+        }
     }
 
     @Override
     public Object getBean(String beanName) {
-        return beans.get(beanName);
+        if (beanName == null || beanName.isBlank()) {
+            throw new IllegalArgumentException("Bean name cannot be null or blank");
+        }
+
+        Object bean = beans.get(beanName);
+        if (bean == null) {
+            throw new BeanResolutionException(
+                    "No bean found with name: '" + beanName + "'. Available beans: " + beans.keySet()
+            );
+        }
+        return bean;
     }
 
     @Override
@@ -83,12 +130,10 @@ public class BeanFactoryImpl implements BeanFactory{
         return beans.keySet().stream().toList();
     }
 
-    private void assertNotNull(Class<?> clazz) throws NullPointerException{
-        if(clazz == null) throw new NullPointerException();
-    }
-
-    private String getBeanName(Class<?> clazz){
-        assertNotNull(clazz);
+    private String getBeanName(Class<?> clazz) {
+        if (clazz == null) {
+            throw new IllegalArgumentException("Class type cannot be null");
+        }
         Bean beanAnnotation = clazz.getAnnotation(Bean.class);
         if (beanAnnotation == null) {
             throw new IllegalArgumentException(
@@ -99,16 +144,48 @@ public class BeanFactoryImpl implements BeanFactory{
                 : beanAnnotation.value();
     }
 
-    /**
-     * Scans all registered beans and returns the first one that is an
-     * instance of {@code clazz} (handles interfaces and abstract types).
-     */
+    private <T> List<String> findSimilarBeans(Class<T> clazz) {
+        List<String> similar = new ArrayList<>();
+        for (Map.Entry<String, Object> entry : beans.entrySet()) {
+            Class<?> beanClass = entry.getValue().getClass();
+            if (beanClass.getName().contains(clazz.getSimpleName())) {
+                similar.add(entry.getKey() + " (" + beanClass.getSimpleName() + ")");
+            }
+        }
+        return similar;
+    }
+
     @SuppressWarnings("unchecked")
     private <T> T findBeanByType(Class<T> clazz) {
-        return (T) beans.values().stream()
-                .filter(b -> clazz.isAssignableFrom(b.getClass()))
-                .findFirst()
-                .orElse(null);
+        if (clazz == null) {
+            throw new IllegalArgumentException("Class type cannot be null");
+        }
+
+        List<String> matchingBeanNames = new ArrayList<>();
+        List<Object> matchingBeans = new ArrayList<>();
+
+        for (Map.Entry<String, Object> entry : beans.entrySet()) {
+            if (clazz.isAssignableFrom(entry.getValue().getClass())) {
+                matchingBeanNames.add(entry.getKey());
+                matchingBeans.add(entry.getValue());
+            }
+        }
+
+        if (matchingBeans.isEmpty()) {
+            return null;
+        }
+
+        if (matchingBeans.size() > 1) {
+            String message = String.format(
+                    "Ambiguous bean of type %s. Found %d matching beans: %s",
+                    clazz.getSimpleName(),
+                    matchingBeans.size(),
+                    matchingBeanNames
+            );
+            throw new AmbiguousBeanException(message);
+        }
+
+        return (T) matchingBeans.get(0);
     }
 
     private <T> T castBeanObject(Class<T> clazz, Object bean){
@@ -137,7 +214,7 @@ public class BeanFactoryImpl implements BeanFactory{
                     Object dependency = getBean(parameterType, resolving);
                     method.invoke(bean, dependency);
                 } catch (Exception e) {
-                    throw new RuntimeException("Failed to inject dependency via setter: " + method.getName(), e);
+                    throw new BeanResolutionException("Failed to inject dependency via setter: " + method.getName(), e);
                 }
             }
         }
@@ -145,14 +222,14 @@ public class BeanFactoryImpl implements BeanFactory{
 
     private Object getBean(Class<?> clazz, Set<Class<?>> resolving) {
         if (resolving.contains(clazz)) {
-            throw new RuntimeException("Circular dependency detected: " + clazz.getName());
+            throw new CircularDependencyException("Circular dependency detected: " + clazz.getName());
         }
         resolving.add(clazz);
         try {
             // Use the public getBean(Class) which handles both @Bean classes and interfaces
             Object bean = getBean(clazz);
             if (bean == null) {
-                throw new RuntimeException("No bean found for class: " + clazz.getName());
+                throw new BeanResolutionException("No bean found for class: " + clazz.getName());
             }
             return bean;
         } finally {
@@ -170,7 +247,7 @@ public class BeanFactoryImpl implements BeanFactory{
                         Object dependency = getBean(field.getType());
                         field.set(bean, dependency);
                     } catch (IllegalAccessException e) {
-                        throw new RuntimeException("Failed to inject dependency via field: " + field.getName(), e);
+                        throw new BeanResolutionException("Failed to inject dependency via field: " + field.getName(), e);
                     }
                 }
             });
