@@ -6,6 +6,7 @@ import vn.phat.aop.AopProxyFactory;
 import vn.phat.aop.TransactionManager;
 import vn.phat.container.BeanFactory;
 import vn.phat.container.BeanFactoryImpl;
+import vn.phat.exception.BeanResolutionException;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -21,7 +22,7 @@ class AopPostProcessor {
     }
 
     void applyTransactionalProxies() {
-        TransactionManager txManager = beanFactory.getBean(TransactionManager.class);
+        TransactionManager txManager = findBean(TransactionManager.class);
         if (txManager == null) {
             System.out.println("[Application] No TransactionManager found – skipping AOP proxy creation.");
             return;
@@ -34,7 +35,7 @@ class AopPostProcessor {
         List<Object> rawTargets = new ArrayList<>();
         for (String beanName : beanNames) {
             Object bean = beanFactory.getBean(beanName);
-            if (bean == null || bean instanceof TransactionManager) continue;
+            if (bean instanceof TransactionManager) continue;
 
             Class<?> clazz = bean.getClass();
             boolean needsProxy = clazz.isAnnotationPresent(Transactional.class)
@@ -59,7 +60,7 @@ class AopPostProcessor {
         for (Field field : target.getClass().getDeclaredFields()) {
             if (!field.isAnnotationPresent(Autowired.class)) continue;
             field.setAccessible(true);
-            Object dep = beanFactory.getBean(field.getType());
+            Object dep = findBean(field.getType());
             if (dep != null) {
                 try {
                     field.set(target, dep);
@@ -68,6 +69,14 @@ class AopPostProcessor {
                             field.getName(), e.getMessage());
                 }
             }
+        }
+    }
+
+    private <T> T findBean(Class<T> clazz) {
+        try {
+            return beanFactory.getBean(clazz);
+        } catch (BeanResolutionException | IllegalArgumentException e) {
+            return null;
         }
     }
 }

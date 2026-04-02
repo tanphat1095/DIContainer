@@ -3,7 +3,7 @@ package vn.phat.loader;
 import vn.phat.annotation.Autowired;
 import vn.phat.annotation.Bean;
 import vn.phat.container.BeanFactory;
-import vn.phat.container.BeanFactoryImpl;
+import vn.phat.exception.BeanResolutionException;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -25,7 +25,7 @@ class BeanRegistration {
         Bean beanMarked = clazz.getAnnotation(Bean.class);
         if (beanMarked == null) return null;
 
-        T existing = (T) findExistingBean(clazz);
+        T existing = findExistingBean(clazz);
         if (existing != null) return existing;
 
         java.lang.reflect.Constructor<?> autowiredConstructor = Arrays.stream(clazz.getDeclaredConstructors())
@@ -36,17 +36,13 @@ class BeanRegistration {
         T object;
         if (autowiredConstructor != null) {
             for (Class<?> paramType : autowiredConstructor.getParameterTypes()) {
-                if (beanFactory.getBean(paramType) == null) {
-                    if (paramType.isAnnotationPresent(Bean.class)) {
-                        registerBeanIfMarked(paramType);
-                    }
+                if (findBean(paramType) == null && paramType.isAnnotationPresent(Bean.class)) {
+                    registerBeanIfMarked(paramType);
                 }
             }
 
             beanFactory.registerBean(clazz, null);
-            @SuppressWarnings("unchecked")
-            T registered = (T) findExistingBean(clazz);
-            object = registered;
+            object = findExistingBean(clazz);
         } else {
             object = clazz.getConstructor().newInstance();
             registerDependencies(object);
@@ -55,13 +51,30 @@ class BeanRegistration {
         return object;
     }
 
-    private Object findExistingBean(Class<?> clazz) {
+    @SuppressWarnings("unchecked")
+    private <T> T findExistingBean(Class<?> clazz) {
         Bean beanMarked = clazz.getAnnotation(Bean.class);
         if (beanMarked == null) return null;
         String name = (beanMarked.value() == null || beanMarked.value().isBlank())
                 ? vn.phat.util.NameConverter.convertCLassToBeanName(clazz)
                 : beanMarked.value();
-        return beanFactory.getBean(name);
+        return (T) findBeanByName(name);
+    }
+
+    private Object findBeanByName(String name) {
+        try {
+            return beanFactory.getBean(name);
+        } catch (BeanResolutionException e) {
+            return null;
+        }
+    }
+
+    private <T> T findBean(Class<T> clazz) {
+        try {
+            return beanFactory.getBean(clazz);
+        } catch (BeanResolutionException | IllegalArgumentException e) {
+            return null;
+        }
     }
 
     private void registerDependencies(Object object)
@@ -72,15 +85,13 @@ class BeanRegistration {
         List<Field> fieldAutowired = Arrays.stream(fields).filter(isAutowiredField).toList();
         for (Field f : fieldAutowired) {
             f.setAccessible(true);
-            Class<?> declaredClass = f.getType();
-            setBeanToField(declaredClass, f, object);
+            setBeanToField(f.getType(), f, object);
         }
 
-        java.lang.reflect.Method[] methods = object.getClass().getDeclaredMethods();
-        for (java.lang.reflect.Method method : methods) {
+        for (java.lang.reflect.Method method : object.getClass().getDeclaredMethods()) {
             if (method.isAnnotationPresent(Autowired.class) && method.getName().startsWith("set") && method.getParameterCount() == 1) {
                 Class<?> paramType = method.getParameterTypes()[0];
-                Object dependency = beanFactory.getBean(paramType);
+                Object dependency = findBean(paramType);
                 if (dependency == null && paramType.isAnnotationPresent(Bean.class)) {
                     dependency = registerBeanIfMarked(paramType);
                 }
@@ -93,7 +104,7 @@ class BeanRegistration {
     <T> void setBeanToField(Class<T> clazz, Field field, Object object)
             throws InvocationTargetException, NoSuchMethodException,
                    InstantiationException, IllegalAccessException {
-        T bean = beanFactory.getBean(clazz);
+        T bean = findBean(clazz);
         if (bean == null && clazz.isAnnotationPresent(Bean.class)) {
             bean = registerBeanIfMarked(clazz);
         }
