@@ -72,7 +72,7 @@ class ApplicationIntegrationTest {
 
         AccountService accountService = beanFactory.getBean(AccountService.class);
         assertNotNull(accountService);
-        assertNotNull(accountService.getBalance("ACC-001"));
+        assertDoesNotThrow(() -> accountService.getBalance("ACC-001"));
     }
 
     @Test
