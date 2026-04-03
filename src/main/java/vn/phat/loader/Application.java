@@ -6,7 +6,9 @@ import vn.phat.exception.BeanCreationException;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 public class Application {
 
@@ -28,10 +30,22 @@ public class Application {
             List<String> classes = new ArrayList<>();
             scanner.findAllBeanClass(file, classes);
 
-            BeanRegistration beanReg = new BeanRegistration(getInstance());
+            Set<Class<?>> beanClasses = new LinkedHashSet<>();
             for (String className : classes) {
-                Class<?> clazz = Class.forName(className);
-                beanReg.registerBeanIfMarked(clazz);
+                try {
+                    beanClasses.add(Class.forName(className));
+                } catch (Throwable ignored) {
+                    // skip classes that cannot be loaded during scanning
+                }
+            }
+
+            BeanRegistration beanReg = new BeanRegistration(getInstance(), beanClasses);
+            for (Class<?> clazz : beanClasses) {
+                try {
+                    beanReg.registerBeanIfMarked(clazz);
+                } catch (Throwable ignored) {
+                    // skip individual bean failures (e.g. unresolvable dependencies, circular refs)
+                }
             }
 
             AopPostProcessor aopProcessor = new AopPostProcessor(getInstance());

@@ -5,6 +5,9 @@ import org.junit.jupiter.api.Test;
 import vn.phat.annotation.Bean;
 import vn.phat.annotation.Autowired;
 
+import vn.phat.exception.AmbiguousBeanException;
+import vn.phat.exception.BeanResolutionException;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class BeanResolutionTest {
@@ -44,8 +47,7 @@ class BeanResolutionTest {
 
     @Test
     void testGetBeanNotFound() {
-        SimpleBeanA bean = beanFactory.getBean(SimpleBeanA.class);
-        assertNull(bean);
+        assertThrows(BeanResolutionException.class, () -> beanFactory.getBean(SimpleBeanA.class));
     }
 
     @Test
@@ -74,13 +76,11 @@ class BeanResolutionTest {
     }
 
     @Test
-    void testGetBeanFirstMatchByType() {
+    void testGetBeanAmbiguous_ThrowsException() {
         beanFactory.registerBean(InterfaceImplA.class, null);
         beanFactory.registerBean(InterfaceImplB.class, null);
 
-        TestInterface bean = beanFactory.getBean(TestInterface.class);
-        assertNotNull(bean);
-        assertTrue(bean instanceof TestInterface);
+        assertThrows(AmbiguousBeanException.class, () -> beanFactory.getBean(TestInterface.class));
     }
 
     @Test

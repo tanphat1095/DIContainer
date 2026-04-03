@@ -5,8 +5,8 @@ import org.junit.jupiter.api.Test;
 import vn.phat.annotation.Bean;
 import vn.phat.annotation.Autowired;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -26,7 +26,7 @@ class ConcurrentBeanAccessTest {
     @Test
     void testConcurrentBeanAccess_SingletonBehavior() throws InterruptedException {
         int threadCount = 10;
-        List<ThreadSafeBean> beans = new ArrayList<>();
+        List<ThreadSafeBean> beans = new CopyOnWriteArrayList<>();
         CountDownLatch latch = new CountDownLatch(threadCount);
 
         for (int i = 0; i < threadCount; i++) {

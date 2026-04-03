@@ -1,18 +1,26 @@
 package vn.phat.loader;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import vn.phat.Main;
-import vn.phat.annotation.Bean;
-import vn.phat.annotation.Autowired;
 import vn.phat.aop.TransactionManager;
 import vn.phat.container.BeanFactory;
 import vn.phat.demo.AccountService;
 import vn.phat.demo.BankService;
 import vn.phat.beans.FirstBean;
 
+import java.lang.reflect.Field;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class ApplicationIntegrationTest {
+
+    @BeforeEach
+    void resetApplication() throws Exception {
+        Field field = Application.class.getDeclaredField("beanFactory");
+        field.setAccessible(true);
+        field.set(null, null);
+    }
 
     @Test
     void testApplicationBootstrap() {

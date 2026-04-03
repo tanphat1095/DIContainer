@@ -38,6 +38,13 @@ public class TransactionalInterceptor implements InvocationHandler {
         // ── AOP advice: BEFORE ──────────────────────────────────────────
         String operationName = target.getClass().getSimpleName() + "." + method.getName() + "()";
 
+        // For REQUIRED: track pre-existing tx so we know if we joined or started
+        TransactionStatus preExisting = null;
+        if (tx.propagation() == Transactional.Propagation.REQUIRED
+                && transactionManager instanceof SimpleTransactionManager stm) {
+            preExisting = stm.getCurrent();
+        }
+
         // Handle REQUIRES_NEW: suspend existing tx if any
         TransactionStatus suspended = null;
         if (tx.propagation() == Transactional.Propagation.REQUIRES_NEW
@@ -50,13 +57,17 @@ public class TransactionalInterceptor implements InvocationHandler {
         }
 
         TransactionStatus status = transactionManager.begin(operationName);
+        // We own the tx only if begin() returned a new status (not the pre-existing one)
+        boolean startedTransaction = (status != preExisting);
 
         try {
             // ── Proceed with the real method ───────────────────────────
             Object result = method.invoke(target, args);
 
             // ── AOP advice: AFTER RETURNING ────────────────────────────
-            transactionManager.commit(status);
+            if (startedTransaction) {
+                transactionManager.commit(status);
+            }
             return result;
 
         } catch (java.lang.reflect.InvocationTargetException ite) {
@@ -67,7 +78,7 @@ public class TransactionalInterceptor implements InvocationHandler {
 
             if (shouldRollback) {
                 transactionManager.rollback(status);
-            } else {
+            } else if (startedTransaction) {
                 transactionManager.commit(status);
             }
 
