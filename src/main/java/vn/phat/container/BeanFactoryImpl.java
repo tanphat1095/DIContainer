@@ -31,15 +31,7 @@ public class BeanFactoryImpl implements BeanFactory{
         }
 
         try {
-            Constructor<?> autowiredConstructor = null;
-            for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
-                if (constructor.isAnnotationPresent(Autowired.class)) {
-                    if (autowiredConstructor != null) {
-                        throw new BeanCreationException("Only one constructor can be annotated with @Autowired");
-                    }
-                    autowiredConstructor = constructor;
-                }
-            }
+            Constructor<?> autowiredConstructor = findAutowiredConstructor(clazz);
 
             Object beanInstance;
             if (autowiredConstructor != null) {
@@ -56,6 +48,30 @@ public class BeanFactoryImpl implements BeanFactory{
         } catch (Exception e) {
             throw new BeanCreationException("Failed to create bean: " + clazz.getName(), e);
         }
+    }
+
+    /**
+     * Returns the constructor annotated with {@link Autowired}, or {@code null} when the
+     * class has a single constructor without it. A class with several constructors must
+     * mark exactly one of them with {@link Autowired}.
+     *
+     * @throws BeanCreationException if more than one constructor is annotated, or if the
+     *                               class has several constructors and none is annotated
+     */
+    public static Constructor<?> findAutowiredConstructor(Class<?> clazz) {
+        Constructor<?>[] constructors = clazz.getDeclaredConstructors();
+        List<Constructor<?>> autowired = Arrays.stream(constructors)
+                .filter(c -> c.isAnnotationPresent(Autowired.class))
+                .toList();
+        if (autowired.size() > 1) {
+            throw new BeanCreationException(clazz.getName() + " has " + autowired.size()
+                    + " constructors annotated with @Autowired; only one is allowed");
+        }
+        if (autowired.isEmpty() && constructors.length > 1) {
+            throw new BeanCreationException(clazz.getName() + " has " + constructors.length
+                    + " constructors; annotate exactly one of them with @Autowired");
+        }
+        return autowired.isEmpty() ? null : autowired.get(0);
     }
 
     @Override

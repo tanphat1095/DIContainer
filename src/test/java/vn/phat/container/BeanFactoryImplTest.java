@@ -9,6 +9,7 @@ import vn.phat.beans.SecondBean;
 import vn.phat.beans.ThirdBean;
 import vn.phat.beans.FourthBean;
 
+import vn.phat.exception.BeanCreationException;
 import vn.phat.exception.BeanResolutionException;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -164,5 +165,51 @@ class BeanFactoryImplTest {
         assertNotNull(firstBean);
         assertNotNull(secondBean);
         assertNotNull(thirdBean);
+    }
+
+    @Test
+    void testMultipleAutowiredConstructorsRejected() {
+        assertThrows(BeanCreationException.class,
+                () -> beanFactory.registerBean(TwoAutowiredConstructors.class, null));
+    }
+
+    @Test
+    void testMultipleConstructorsWithoutAutowiredRejected() {
+        assertThrows(BeanCreationException.class,
+                () -> beanFactory.registerBean(TwoPlainConstructors.class, null));
+    }
+
+    @Test
+    void testMultipleConstructorsWithOneAutowiredAccepted() {
+        beanFactory.registerBean(OneAutowiredOfTwo.class, null);
+        assertNotNull(beanFactory.getBean(OneAutowiredOfTwo.class).thirdBean);
+    }
+
+    @Bean
+    static class TwoAutowiredConstructors {
+        @Autowired
+        TwoAutowiredConstructors() {}
+
+        @Autowired
+        TwoAutowiredConstructors(ThirdBean thirdBean) {}
+    }
+
+    @Bean
+    static class TwoPlainConstructors {
+        TwoPlainConstructors() {}
+
+        TwoPlainConstructors(ThirdBean thirdBean) {}
+    }
+
+    @Bean
+    static class OneAutowiredOfTwo {
+        ThirdBean thirdBean;
+
+        OneAutowiredOfTwo() {}
+
+        @Autowired
+        OneAutowiredOfTwo(ThirdBean thirdBean) {
+            this.thirdBean = thirdBean;
+        }
     }
 }
