@@ -3,6 +3,7 @@ package vn.phat.loader;
 import vn.phat.annotation.Autowired;
 import vn.phat.annotation.Bean;
 import vn.phat.container.BeanFactory;
+import vn.phat.container.BeanFactoryImpl;
 import vn.phat.exception.BeanResolutionException;
 
 import java.lang.reflect.Modifier;
@@ -37,10 +38,7 @@ class BeanRegistration {
 
         registering.add(clazz);
         try {
-            java.lang.reflect.Constructor<?> autowiredConstructor = Arrays.stream(clazz.getDeclaredConstructors())
-                    .filter(c -> c.isAnnotationPresent(Autowired.class))
-                    .findFirst()
-                    .orElse(null);
+            java.lang.reflect.Constructor<?> autowiredConstructor = BeanFactoryImpl.findAutowiredConstructor(clazz);
 
             T object;
             if (autowiredConstructor != null) {

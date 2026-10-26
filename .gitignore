@@ -38,3 +38,6 @@ build/
 .DS_Store
 
 .idea/
+### Local tooling ###
+CLAUDE.md
+graphify-out/

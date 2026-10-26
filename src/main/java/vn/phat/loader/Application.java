@@ -43,6 +43,8 @@ public class Application {
             for (Class<?> clazz : beanClasses) {
                 try {
                     beanReg.registerBeanIfMarked(clazz);
+                } catch (BeanCreationException e) {
+                    throw e;
                 } catch (Throwable ignored) {
                     // skip individual bean failures (e.g. unresolvable dependencies, circular refs)
                 }
